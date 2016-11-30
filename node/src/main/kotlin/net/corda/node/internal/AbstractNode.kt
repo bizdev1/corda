@@ -51,6 +51,8 @@ import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.databaseTransaction
 import org.jetbrains.exposed.sql.Database
 import org.slf4j.Logger
+import rx.Scheduler
+import rx.schedulers.Schedulers
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Path
 import java.security.KeyPair
@@ -100,6 +102,10 @@ abstract class AbstractNode(open val configuration: NodeConfiguration, val netwo
     // low-performance prototyping period.
     protected abstract val serverThread: AffinityExecutor
 
+    // A Scheduler for observing on, if you do not require the observation to be synchronous.  You should prefer
+    // observing here if, for example, you are expecting database transactions to have been committed.
+    protected val serverScheduler: Scheduler by lazy { Schedulers.from(serverThread) }
+
     // Objects in this list will be scanned by the DataUploadServlet and can be handed new data via HTTP.
     // Don't mutate this after startup.
     protected val _servicesThatAcceptUploads = ArrayList<AcceptsFileUpload>()
@@ -109,6 +115,8 @@ abstract class AbstractNode(open val configuration: NodeConfiguration, val netwo
     protected val partyKeys = mutableSetOf<KeyPair>()
 
     val services = object : ServiceHubInternal() {
+        override val externallyObservableScheduler: Scheduler
+            get() = serverScheduler
         override val networkService: MessagingServiceInternal get() = net
         override val networkMapCache: NetworkMapCache get() = netMapCache
         override val storageService: TxWritableStorageService get() = storage
@@ -202,7 +210,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration, val netwo
             val storageServices = initialiseStorageService(configuration.basedir)
             storage = storageServices.first
             checkpointStorage = storageServices.second
-            netMapCache = InMemoryNetworkMapCache()
+            netMapCache = InMemoryNetworkMapCache(services)
             net = makeMessagingService()
             schemas = makeSchemaService()
             vault = makeVaultService()
@@ -472,9 +480,9 @@ abstract class AbstractNode(open val configuration: NodeConfiguration, val netwo
     protected open fun initialiseStorageService(dir: Path): Pair<TxWritableStorageService, CheckpointStorage> {
         val attachments = makeAttachmentStorage(dir)
         val checkpointStorage = DBCheckpointStorage()
-        val transactionStorage = DBTransactionStorage()
+        val transactionStorage = DBTransactionStorage(services)
         _servicesThatAcceptUploads += attachments
-        val stateMachineTransactionMappingStorage = DBTransactionMappingStorage()
+        val stateMachineTransactionMappingStorage = DBTransactionMappingStorage(services)
         return Pair(
                 constructStorageService(attachments, transactionStorage, stateMachineTransactionMappingStorage),
                 checkpointStorage

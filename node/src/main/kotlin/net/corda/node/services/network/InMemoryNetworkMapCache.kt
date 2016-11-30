@@ -10,6 +10,7 @@ import net.corda.core.messaging.MessagingService
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.messaging.createMessage
 import net.corda.core.node.NodeInfo
+import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.DEFAULT_SESSION_ID
 import net.corda.core.node.services.NetworkCacheError
 import net.corda.core.node.services.NetworkMapCache
@@ -24,6 +25,7 @@ import net.corda.node.services.network.NetworkMapService.Companion.SUBSCRIPTION_
 import net.corda.node.services.network.NetworkMapService.FetchMapResponse
 import net.corda.node.services.network.NetworkMapService.SubscribeResponse
 import net.corda.node.utilities.AddOrRemove
+import net.corda.node.utilities.export
 import rx.Observable
 import rx.subjects.PublishSubject
 import java.security.SignatureException
@@ -42,7 +44,7 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     override val partyNodes: List<NodeInfo> get() = registeredNodes.map { it.value }
     override val networkMapNodes: List<NodeInfo> get() = getNodesWithService(NetworkMapService.type)
     private val _changed = PublishSubject.create<MapChange>()
-    override val changed: Observable<MapChange> = _changed
+    override val changed: Observable<MapChange> = _changed.export(services)
     private val _registrationFuture = SettableFuture.create<Unit>()
     override val mapServiceRegistered: ListenableFuture<Unit> get() = _registrationFuture
 
@@ -51,7 +53,7 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
 
     override fun track(): Pair<List<NodeInfo>, Observable<MapChange>> {
         synchronized(_changed) {
-            return Pair(partyNodes, _changed.bufferUntilSubscribed())
+            return Pair(partyNodes, changed.bufferUntilSubscribed())
         }
     }
 
