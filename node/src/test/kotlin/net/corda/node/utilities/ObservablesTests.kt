@@ -1,6 +1,7 @@
 package net.corda.node.utilities
 
 import com.google.common.util.concurrent.SettableFuture
+import net.corda.core.ThreadBox
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.VaultService
@@ -17,7 +18,8 @@ import kotlin.test.assertNotNull
 class ObservablesTests {
 
     @Test
-    fun `exported from within node is raw and exported from outside node is deferred`() {
+            // Note cannot use quoted method name as compiler fails to escape name when generating class names.
+    fun exportedFromWithinNodeIsRawAndExportedFromOutsideNodeIsDeferred() {
         val rawObservable = PublishSubject.create<Unit>()
         var unexportedObservable: Observable<Unit>? = null
 
@@ -38,19 +40,22 @@ class ObservablesTests {
         val exportedObservable: Observable<Unit> = rawObservable.export(node.services)
 
         // Setup listeners and then send observation.
-        var eventSeqNo = 0
+        val eventSeqNo = ThreadBox(object {
+            var value = 0
+        })
         val exportedEventSeqNo = SettableFuture.create<Pair<Int, Boolean>>()
         val unexportedEventSeqNo = SettableFuture.create<Pair<Int, Boolean>>()
         val mainThread = Thread.currentThread()
 
         assertNotNull(unexportedObservable, "unexportedObservable is null")
-        exportedObservable.subscribe { exportedEventSeqNo.set(eventSeqNo++ to (Thread.currentThread() == mainThread)) }
-        unexportedObservable!!.subscribe { unexportedEventSeqNo.set(eventSeqNo++ to (Thread.currentThread() == mainThread)) }
+        exportedObservable.subscribe { exportedEventSeqNo.set(eventSeqNo.locked { value++ } to (Thread.currentThread() == mainThread)) }
+        unexportedObservable!!.subscribe { unexportedEventSeqNo.set(eventSeqNo.locked { value++ } to (Thread.currentThread() == mainThread)) }
 
         assertThat(rawObservable).isNotEqualTo(exportedObservable)
         assertThat(rawObservable).isEqualTo(unexportedObservable)
 
-        rawObservable.onNext(Unit)
+        // Use the re-entrant locking to ensure same thread subscriber runs first, as other thread locked out.
+        eventSeqNo.locked { rawObservable.onNext(Unit) }
 
         // Unexported should fire first and be on main thread as it is synchronous.
         assertThat(unexportedEventSeqNo.get()).isEqualTo(0 to true)

@@ -115,7 +115,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration, val netwo
     protected val partyKeys = mutableSetOf<KeyPair>()
 
     val services = object : ServiceHubInternal() {
-        override val externallyObservableScheduler: Scheduler
+        override val externalObservationScheduler: Scheduler
             get() = serverScheduler
         override val networkService: MessagingServiceInternal get() = net
         override val networkMapCache: NetworkMapCache get() = netMapCache

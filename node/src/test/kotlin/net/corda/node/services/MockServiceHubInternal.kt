@@ -40,7 +40,7 @@ open class MockServiceHubInternal(
         val schemas: SchemaService? = NodeSchemaService(),
         val serverScheduler: Scheduler? = Schedulers.immediate()
 ) : ServiceHubInternal() {
-    override val externallyObservableScheduler: Scheduler
+    override val externalObservationScheduler: Scheduler
         get() = serverScheduler ?: throw UnsupportedOperationException()
     override val vaultService: VaultService = customVault ?: NodeVaultService(this)
     override val keyManagementService: KeyManagementService

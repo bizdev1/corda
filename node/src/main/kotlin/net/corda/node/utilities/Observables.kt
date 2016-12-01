@@ -11,5 +11,5 @@ fun <T : Any> Observable<T>.export(services: ServiceHub): Observable<T> {
             return this
         }
     }
-    return this.observeOn(services.externallyObservableScheduler)
+    return this.observeOn(services.externalObservationScheduler)
 }

@@ -31,7 +31,7 @@ interface ServiceHub {
 
     // A Scheduler for observing on, if you do not require the observation to be synchronous.  You should prefer
     // observing here if, for example, you are expecting database transactions to have been committed.
-    val externallyObservableScheduler: Scheduler
+    val externalObservationScheduler: Scheduler
 
     /**
      * Given a list of [SignedTransaction]s, writes them to the local storage for validated transactions and then

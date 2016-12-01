@@ -40,7 +40,7 @@ import javax.annotation.concurrent.ThreadSafe
  * building chains of transactions and verifying them. It isn't sufficient for testing flows however.
  */
 open class MockServices(val key: KeyPair = generateKeyPair()) : ServiceHub {
-    override val externallyObservableScheduler: Scheduler = Schedulers.immediate()
+    override val externalObservationScheduler: Scheduler = Schedulers.immediate()
 
     override fun <T : Any> invokeFlowAsync(logicType: Class<out FlowLogic<T>>, vararg args: Any?): FlowStateMachine<T> {
         throw UnsupportedOperationException("not implemented")
