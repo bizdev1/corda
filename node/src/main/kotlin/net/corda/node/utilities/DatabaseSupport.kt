@@ -71,8 +71,8 @@ fun <T> isolatedTransaction(database: Database, block: Transaction.() -> T): T {
  * is otherwise effectively stateless so it's replacement does not matter.  The [ThreadLocal] is then set correctly and
  * explicitly just prior to initiating a transaction in [databaseTransaction] and [createDatabaseTransaction] above.
  *
- * The [StrandLocalTransactionManager] instances have an [rx.Observable] of the transaction close [Boundary]s which
- * facilitates the use of [rx.Observable.afterCommit] to create event streams that only emit once the database
+ * The [StrandLocalTransactionManager] instances have an [Observable] of the transaction close [Boundary]s which
+ * facilitates the use of [Observable.afterCommit] to create event streams that only emit once the database
  * transaction is closed and the data has been persisted and becomes visible to other observers.
  */
 class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionManager {
@@ -174,7 +174,6 @@ fun <T : Any> Observable<T>.afterCommit(): Observable<T> {
 
 // Composite columns for use with below Exposed helpers.
 data class PartyColumns(val name: Column<String>, val owningKey: Column<CompositeKey>)
-
 data class StateRefColumns(val txId: Column<SecureHash>, val index: Column<Int>)
 data class TxnNoteColumns(val txId: Column<SecureHash>, val note: Column<String>)
 
