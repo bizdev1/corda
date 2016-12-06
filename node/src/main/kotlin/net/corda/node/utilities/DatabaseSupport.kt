@@ -7,9 +7,11 @@ import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.parsePublicKeyBase58
 import net.corda.core.crypto.toBase58String
+import net.corda.node.utilities.StrandLocalTransactionManager.Boundary
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionInterface
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import rx.Observable
 import rx.subjects.PublishSubject
 import java.io.Closeable
 import java.security.PublicKey
@@ -69,7 +71,9 @@ fun <T> isolatedTransaction(database: Database, block: Transaction.() -> T): T {
  * is otherwise effectively stateless so it's replacement does not matter.  The [ThreadLocal] is then set correctly and
  * explicitly just prior to initiating a transaction in [databaseTransaction] and [createDatabaseTransaction] above.
  *
- * TODO: mention observable.
+ * The [StrandLocalTransactionManager] instances have an [rx.Observable] of the transaction close [Boundary]s which
+ * facilitates the use of [rx.Observable.afterCommit] to create event streams that only emit once the database
+ * transaction is closed and the data has been persisted and becomes visible to other observers.
  */
 class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionManager {
 
@@ -100,9 +104,7 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
         val transactionBoundaries: PublishSubject<Boundary> get() = manager._transactionBoundaries
     }
 
-    enum class Boundary {
-        CLOSE
-    }
+    object Boundary
 
     private val _transactionBoundaries = PublishSubject.create<Boundary>()
 
@@ -150,10 +152,24 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
             connection.close()
             threadLocal.set(outerTransaction)
             if (outerTransaction == null) {
-                transactionBoundaries.onNext(Boundary.CLOSE)
+                transactionBoundaries.onNext(Boundary)
             }
         }
     }
+}
+
+/**
+ * Buffer observations until after the current database transaction has been committed.
+ *
+ * Those outside the node should be notified after any [Flow] has checkpointed and the associated database transaction
+ * has been committed so that changes are externally visible.  To do so for any [Observable], use this extension function.
+ * Otherwise the state associated with the observation might not yet have changed (been committed) to reflect it.
+ * If within the node, then it's okay to execute immediately within the same database transaction and therefore this
+ * extension function should not be used.
+ */
+fun <T : Any> Observable<T>.afterCommit(): Observable<T> {
+    val databaseTxBoundaries: Observable<StrandLocalTransactionManager.Boundary> = StrandLocalTransactionManager.transactionBoundaries
+    return this.buffer(databaseTxBoundaries).concatMap { Observable.from(it) }
 }
 
 // Composite columns for use with below Exposed helpers.
