@@ -17,7 +17,6 @@ import net.corda.node.internal.AbstractNode
 import net.corda.node.services.statemachine.FlowStateMachineImpl
 import net.corda.node.services.statemachine.StateMachineManager.Change
 import net.corda.node.utilities.AddOrRemove.ADD
-import net.corda.node.utilities.databaseTransaction
 import net.corda.testing.node.MockIdentityService
 import net.corda.testing.node.MockServices
 import rx.Subscriber
@@ -149,11 +148,7 @@ inline fun <reified P : FlowLogic<*>> AbstractNode.initiateSingleShotFlow(
         override fun onCompleted() {}
     }
 
-    // We need to make sure the database is set to the right one in a mock network before we subscribe because it
-    // waits for commit from the "current" database.
-    databaseTransaction(database) {
-        smm.changes.subscribe(subscriber)
-    }
+    smm.changes.subscribe(subscriber)
 
     return future
 }

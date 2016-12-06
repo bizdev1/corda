@@ -92,6 +92,7 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
         var started = false
         val stateMachines = LinkedHashMap<FlowStateMachineImpl<*>, Checkpoint>()
         val changesPublisher = PublishSubject.create<Change>()
+        val changesAfterCommit = changesPublisher.afterCommit()
 
         fun notifyChangeObservers(psm: FlowStateMachineImpl<*>, addOrRemove: AddOrRemove) {
             changesPublisher.onNext(Change(psm.logic, addOrRemove, psm.id))
@@ -141,7 +142,7 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
      * which may change across restarts.
      */
     val changes: Observable<Change>
-        get() = mutex.content.changesPublisher.afterCommit()
+        get() = mutex.content.changesAfterCommit
 
     init {
         Fiber.setDefaultUncaughtExceptionHandler { fiber, throwable ->
@@ -186,7 +187,7 @@ class StateMachineManager(val serviceHub: ServiceHubInternal,
     fun track(): Pair<List<FlowStateMachineImpl<*>>, Observable<Change>> {
         return mutex.locked {
             val bufferedChanges = UnicastSubject.create<Change>()
-            changesPublisher.afterCommit().subscribe(bufferedChanges)
+            changesAfterCommit.subscribe(bufferedChanges)
             Pair(stateMachines.keys.toList(), bufferedChanges)
         }
     }

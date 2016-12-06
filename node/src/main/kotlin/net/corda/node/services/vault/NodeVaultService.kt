@@ -80,6 +80,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         }
 
         val _updatesPublisher = PublishSubject.create<Vault.Update>()
+        val _updatesAfterCommit = _updatesPublisher.afterCommit()
 
         fun allUnconsumedStates(): Iterable<StateAndRef<ContractState>> {
             // Order by txhash for if and when transaction storage has some caching.
@@ -108,11 +109,11 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         get() = mutex.locked { _updatesPublisher }
 
     override val updates: Observable<Vault.Update>
-        get() = mutex.locked { _updatesPublisher.afterCommit() }
+        get() = mutex.locked { _updatesAfterCommit }
 
     override fun track(): Pair<Vault, Observable<Vault.Update>> {
         return mutex.locked {
-            Pair(Vault(allUnconsumedStates()), _updatesPublisher.afterCommit().bufferUntilSubscribed())
+            Pair(Vault(allUnconsumedStates()), _updatesAfterCommit.bufferUntilSubscribed())
         }
     }
 
