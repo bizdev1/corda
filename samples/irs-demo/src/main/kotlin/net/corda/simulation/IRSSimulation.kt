@@ -42,7 +42,6 @@ class IRSSimulation(networkSendManuallyPumped: Boolean, runAsync: Boolean, laten
         val future = SettableFuture.create<Unit>()
 
         startIRSDealBetween(0, 1).success {
-            println("Success")
             // Next iteration is a pause.
             executeOnNextIteration.add {}
             executeOnNextIteration.add {
@@ -121,7 +120,6 @@ class IRSSimulation(networkSendManuallyPumped: Boolean, runAsync: Boolean, laten
 
         @Suppress("UNCHECKED_CAST")
         val acceptorTx = node2.initiateSingleShotFlow(Instigator::class) { Acceptor(it) }.flatMap {
-            println("acceptor mapped")
             (it.fsm as FlowStateMachine<SignedTransaction>).resultFuture
         }
 
@@ -130,10 +128,6 @@ class IRSSimulation(networkSendManuallyPumped: Boolean, runAsync: Boolean, laten
 
         val instigator = Instigator(node2.info.legalIdentity, AutoOffer(notary.info.notaryIdentity, irs), node1.keyPair!!)
         val instigatorTx: ListenableFuture<SignedTransaction> = node1.services.startFlow(instigator).resultFuture
-
-        println("Futures")
-        instigatorTx.success { println("Intigator") }
-        acceptorTx.success { println("Acceptor") }
 
         return Futures.allAsList(instigatorTx, acceptorTx).flatMap { instigatorTx }
     }
