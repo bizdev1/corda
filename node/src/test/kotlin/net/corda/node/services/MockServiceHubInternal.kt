@@ -20,8 +20,6 @@ import net.corda.node.services.vault.NodeVaultService
 import net.corda.testing.MOCK_IDENTITY_SERVICE
 import net.corda.testing.node.MockNetworkMapCache
 import net.corda.testing.node.MockStorageService
-import rx.Scheduler
-import rx.schedulers.Schedulers
 import java.time.Clock
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
@@ -33,15 +31,12 @@ open class MockServiceHubInternal(
         val net: MessagingServiceInternal? = null,
         val identity: IdentityService? = MOCK_IDENTITY_SERVICE,
         val storage: TxWritableStorageService? = MockStorageService(),
-        val mapCache: NetworkMapCache? = null,
+        val mapCache: NetworkMapCache? = MockNetworkMapCache(),
         val scheduler: SchedulerService? = null,
         val overrideClock: Clock? = NodeClock(),
         val flowFactory: FlowLogicRefFactory? = FlowLogicRefFactory(),
-        val schemas: SchemaService? = NodeSchemaService(),
-        val serverScheduler: Scheduler? = Schedulers.immediate()
+        val schemas: SchemaService? = NodeSchemaService()
 ) : ServiceHubInternal() {
-    override val externalObservationScheduler: Scheduler
-        get() = serverScheduler ?: throw UnsupportedOperationException()
     override val vaultService: VaultService = customVault ?: NodeVaultService(this)
     override val keyManagementService: KeyManagementService
         get() = keyManagement ?: throw UnsupportedOperationException()
@@ -49,7 +44,8 @@ open class MockServiceHubInternal(
         get() = identity ?: throw UnsupportedOperationException()
     override val networkService: MessagingServiceInternal
         get() = net ?: throw UnsupportedOperationException()
-    override val networkMapCache: NetworkMapCache by lazy { mapCache ?: MockNetworkMapCache(this) }
+    override val networkMapCache: NetworkMapCache
+        get() = mapCache ?: throw UnsupportedOperationException()
     override val storageService: StorageService
         get() = storage ?: throw UnsupportedOperationException()
     override val schedulerService: SchedulerService

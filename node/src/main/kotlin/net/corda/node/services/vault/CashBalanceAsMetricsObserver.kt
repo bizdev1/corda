@@ -11,7 +11,7 @@ import java.util.*
 class CashBalanceAsMetricsObserver(val serviceHubInternal: ServiceHubInternal) {
     init {
         // TODO: Need to consider failure scenarios.  This needs to run if the TX is successfully recorded
-        serviceHubInternal.vaultService.updates.subscribe { update ->
+        serviceHubInternal.vaultService.rawUpdates.subscribe { update ->
             exportCashBalancesViaMetrics(serviceHubInternal.vaultService)
         }
     }

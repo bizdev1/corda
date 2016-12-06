@@ -5,7 +5,6 @@ import net.corda.core.crypto.DummyPublicKey
 import net.corda.core.crypto.Party
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.NodeInfo
-import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.node.services.network.InMemoryNetworkMapCache
 import rx.Observable
@@ -14,7 +13,7 @@ import rx.subjects.PublishSubject
 /**
  * Network map cache with no backing map service.
  */
-class MockNetworkMapCache(services: ServiceHub) : InMemoryNetworkMapCache(services) {
+class MockNetworkMapCache() : InMemoryNetworkMapCache() {
     override val changed: Observable<NetworkMapCache.MapChange> = PublishSubject.create<NetworkMapCache.MapChange>()
 
     data class MockAddress(val id: String): SingleMessageRecipient

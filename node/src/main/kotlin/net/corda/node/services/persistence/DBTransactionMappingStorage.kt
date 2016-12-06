@@ -4,7 +4,6 @@ import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
 import net.corda.core.crypto.SecureHash
 import net.corda.core.flows.StateMachineRunId
-import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.StateMachineRecordedTransactionMappingStorage
 import net.corda.core.node.services.StateMachineTransactionMapping
 import net.corda.node.utilities.*
@@ -22,7 +21,7 @@ import javax.annotation.concurrent.ThreadSafe
  *
  */
 @ThreadSafe
-class DBTransactionMappingStorage(val services: ServiceHub) : StateMachineRecordedTransactionMappingStorage {
+class DBTransactionMappingStorage : StateMachineRecordedTransactionMappingStorage {
 
     private object Table : JDBCHashedTable("${NODE_DATABASE_PREFIX}transaction_mappings") {
         val txId = secureHash("tx_id")
@@ -59,7 +58,7 @@ class DBTransactionMappingStorage(val services: ServiceHub) : StateMachineRecord
         mutex.locked {
             return Pair(
                     stateMachineTransactionMap.map { StateMachineTransactionMapping(it.value, it.key) },
-                    updates.export(services).bufferUntilSubscribed()
+                    updates.afterCommit().bufferUntilSubscribed()
             )
         }
     }

@@ -10,6 +10,7 @@ import net.corda.core.crypto.toBase58String
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.transactions.TransactionInterface
 import org.jetbrains.exposed.sql.transactions.TransactionManager
+import rx.subjects.PublishSubject
 import java.io.Closeable
 import java.security.PublicKey
 import java.sql.Connection
@@ -18,6 +19,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Table prefix for all tables owned by the node module.
@@ -66,12 +68,15 @@ fun <T> isolatedTransaction(database: Database, block: Transaction.() -> T): T {
  * over each other.  So here we use a companion object to hold them as [ThreadLocal] and [StrandLocalTransactionManager]
  * is otherwise effectively stateless so it's replacement does not matter.  The [ThreadLocal] is then set correctly and
  * explicitly just prior to initiating a transaction in [databaseTransaction] and [createDatabaseTransaction] above.
+ *
+ * TODO: mention observable.
  */
 class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionManager {
 
     companion object {
         private val threadLocalDb = ThreadLocal<Database>()
         private val threadLocalTx = ThreadLocal<Transaction>()
+        private val databaseToInstance = ConcurrentHashMap<Database, StrandLocalTransactionManager>()
 
         fun setThreadLocalTx(tx: Transaction?): Pair<Database?, Transaction?> {
             val oldTx = threadLocalTx.get()
@@ -89,10 +94,19 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
             set(value: Database) {
                 threadLocalDb.set(value)
             }
+
+        val manager: StrandLocalTransactionManager get() = databaseToInstance[database]!!
+
+        val transactionBoundaries: PublishSubject<Boundary> get() = manager._transactionBoundaries
     }
 
+    enum class Boundary {
+        CLOSE
+    }
+
+    private val _transactionBoundaries = PublishSubject.create<Boundary>()
+
     init {
-        database = initWithDatabase
         // Found a unit test that was forgetting to close the database transactions.  When you close() on the top level
         // database transaction it will reset the threadLocalTx back to null, so if it isn't then there is still a
         // databae transaction open.  The [databaseTransaction] helper above handles this in a finally clause for you
@@ -100,16 +114,18 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
         if (threadLocalTx.get() != null) {
             throw IllegalStateException("Was not expecting to find existing database transaction on current strand when setting database: ${Strand.currentStrand()}, ${threadLocalTx.get()}")
         }
+        database = initWithDatabase
+        databaseToInstance[database] = this
     }
 
-    override fun newTransaction(isolation: Int): Transaction = Transaction(StrandLocalTransaction(database, isolation, threadLocalTx)).apply {
+    override fun newTransaction(isolation: Int): Transaction = Transaction(StrandLocalTransaction(database, isolation, threadLocalTx, transactionBoundaries)).apply {
         threadLocalTx.set(this)
     }
 
     override fun currentOrNull(): Transaction? = threadLocalTx.get()
 
     // Direct copy of [ThreadLocalTransaction].
-    private class StrandLocalTransaction(override val db: Database, isolation: Int, val threadLocal: ThreadLocal<Transaction>) : TransactionInterface {
+    private class StrandLocalTransaction(override val db: Database, isolation: Int, val threadLocal: ThreadLocal<Transaction>, val transactionBoundaries: PublishSubject<Boundary>) : TransactionInterface {
 
         override val connection: Connection by lazy(LazyThreadSafetyMode.NONE) {
             db.connector().apply {
@@ -133,6 +149,9 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
         override fun close() {
             connection.close()
             threadLocal.set(outerTransaction)
+            if (outerTransaction == null) {
+                transactionBoundaries.onNext(Boundary.CLOSE)
+            }
         }
     }
 }

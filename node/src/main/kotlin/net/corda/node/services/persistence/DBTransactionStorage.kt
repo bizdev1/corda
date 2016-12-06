@@ -3,7 +3,6 @@ package net.corda.node.services.persistence
 import com.google.common.annotations.VisibleForTesting
 import net.corda.core.bufferUntilSubscribed
 import net.corda.core.crypto.SecureHash
-import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.TransactionStorage
 import net.corda.core.transactions.SignedTransaction
 import net.corda.node.utilities.*
@@ -14,7 +13,7 @@ import rx.Observable
 import rx.subjects.PublishSubject
 import java.util.Collections.synchronizedMap
 
-class DBTransactionStorage(val services: ServiceHub) : TransactionStorage {
+class DBTransactionStorage : TransactionStorage {
     private object Table : JDBCHashedTable("${NODE_DATABASE_PREFIX}transactions") {
         val txId = secureHash("tx_id")
         val transaction = blob("transaction")
@@ -61,7 +60,7 @@ class DBTransactionStorage(val services: ServiceHub) : TransactionStorage {
 
     val updatesPublisher = PublishSubject.create<SignedTransaction>().toSerialized()
     override val updates: Observable<SignedTransaction>
-        get() = updatesPublisher.export(services)
+        get() = updatesPublisher.afterCommit()
 
     override fun track(): Pair<List<SignedTransaction>, Observable<SignedTransaction>> {
         synchronized(txStorage) {

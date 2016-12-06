@@ -17,8 +17,6 @@ import net.corda.node.services.persistence.InMemoryStateMachineRecordedTransacti
 import net.corda.testing.MEGA_CORP
 import net.corda.testing.MINI_CORP
 import rx.Observable
-import rx.Scheduler
-import rx.schedulers.Schedulers
 import rx.subjects.PublishSubject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -40,8 +38,6 @@ import javax.annotation.concurrent.ThreadSafe
  * building chains of transactions and verifying them. It isn't sufficient for testing flows however.
  */
 open class MockServices(val key: KeyPair = generateKeyPair()) : ServiceHub {
-    override val externalObservationScheduler: Scheduler = Schedulers.immediate()
-
     override fun <T : Any> invokeFlowAsync(logicType: Class<out FlowLogic<T>>, vararg args: Any?): FlowStateMachine<T> {
         throw UnsupportedOperationException("not implemented")
     }

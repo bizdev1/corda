@@ -13,7 +13,6 @@ import net.corda.core.utilities.LogHelper
 import net.corda.node.services.transactions.PersistentUniquenessProvider
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.databaseTransaction
-import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
 import org.assertj.core.api.Assertions.assertThat
 import org.jetbrains.exposed.sql.Database
@@ -122,7 +121,7 @@ class DBTransactionStorageTests {
 
     private fun newTransactionStorage() {
         databaseTransaction(database) {
-            transactionStorage = DBTransactionStorage(MockServices())
+            transactionStorage = DBTransactionStorage()
         }
     }
 

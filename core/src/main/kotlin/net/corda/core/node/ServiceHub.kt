@@ -6,7 +6,6 @@ import net.corda.core.flows.FlowStateMachine
 import net.corda.core.messaging.MessagingService
 import net.corda.core.node.services.*
 import net.corda.core.transactions.SignedTransaction
-import rx.Scheduler
 import java.security.KeyPair
 import java.time.Clock
 
@@ -28,10 +27,6 @@ interface ServiceHub {
     val schedulerService: SchedulerService
     val clock: Clock
     val myInfo: NodeInfo
-
-    // A Scheduler for observing on, if you do not require the observation to be synchronous.  You should prefer
-    // observing here if, for example, you are expecting database transactions to have been committed.
-    val externalObservationScheduler: Scheduler
 
     /**
      * Given a list of [SignedTransaction]s, writes them to the local storage for validated transactions and then
