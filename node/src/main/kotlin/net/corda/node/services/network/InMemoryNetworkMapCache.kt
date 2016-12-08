@@ -53,8 +53,8 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     protected var registeredNodes: MutableMap<Party, NodeInfo> = Collections.synchronizedMap(HashMap<Party, NodeInfo>())
 
     override fun track(): Pair<List<NodeInfo>, Observable<MapChange>> {
-        synchronized(changed) {
-            return Pair(partyNodes, changed.bufferUntilSubscribed())
+        synchronized(_changed) {
+            return Pair(partyNodes, _changed.bufferUntilSubscribed())
         }
     }
 

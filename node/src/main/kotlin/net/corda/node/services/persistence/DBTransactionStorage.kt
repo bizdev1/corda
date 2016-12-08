@@ -58,9 +58,9 @@ class DBTransactionStorage : TransactionStorage {
         }
     }
 
-    private val updatesPublisher = PublishSubject.create<SignedTransaction>().toSerialized()
-
-    override val updates: Observable<SignedTransaction> get() = updatesPublisher
+    val updatesPublisher = PublishSubject.create<SignedTransaction>().toSerialized()
+    override val updates: Observable<SignedTransaction>
+        get() = updatesPublisher
 
     override fun track(): Pair<List<SignedTransaction>, Observable<SignedTransaction>> {
         synchronized(txStorage) {
