@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.transactions.TransactionInterface
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import rx.Observable
 import rx.subjects.PublishSubject
+import rx.subjects.Subject
 import rx.subjects.UnicastSubject
 import java.io.Closeable
 import java.security.PublicKey
@@ -190,7 +191,7 @@ fun <T : Any> Observable<T>.afterDatabaseCommit(): Observable<T> {
     return this.buffer(databaseTxBoundaries).concatMap { Observable.from(it) }
 }
 
-fun <T : Any> PublishSubject<T>.bufferUntilDatabaseCommit(): rx.Observer<T> {
+fun <T : Any> Subject<T, T>.bufferUntilDatabaseCommit(): rx.Observer<T> {
     val currentTxId = StrandLocalTransactionManager.transactionId
     val databaseTxBoundary: Observable<StrandLocalTransactionManager.Boundary> = StrandLocalTransactionManager.transactionBoundaries.filter { it.txId == currentTxId }.first()
     val subject = UnicastSubject.create<T>()

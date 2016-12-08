@@ -79,8 +79,10 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
             }
         }
 
+        val _rawUpdatesPublisher = PublishSubject.create<Vault.Update>()
         val _updatesPublisher = PublishSubject.create<Vault.Update>()
-        val _updatesAfterCommit = _updatesPublisher.afterDatabaseCommit()
+        // For use during publishing only.
+        val updatesPublisher: rx.Observer<Vault.Update> get() = _updatesPublisher.bufferUntilDatabaseCommit()
 
         fun allUnconsumedStates(): Iterable<StateAndRef<ContractState>> {
             // Order by txhash for if and when transaction storage has some caching.
@@ -106,14 +108,14 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
     override val currentVault: Vault get() = mutex.locked { Vault(allUnconsumedStates()) }
 
     override val rawUpdates: Observable<Vault.Update>
-        get() = mutex.locked { _updatesPublisher }
+        get() = mutex.locked { _rawUpdatesPublisher }
 
     override val updates: Observable<Vault.Update>
-        get() = mutex.locked { _updatesAfterCommit }
+        get() = mutex.locked { _updatesPublisher }
 
     override fun track(): Pair<Vault, Observable<Vault.Update>> {
         return mutex.locked {
-            Pair(Vault(allUnconsumedStates()), _updatesAfterCommit.bufferUntilSubscribed())
+            Pair(Vault(allUnconsumedStates()), _updatesPublisher.bufferUntilSubscribed())
         }
     }
 
@@ -131,7 +133,9 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         if (netDelta != Vault.NoUpdate) {
             mutex.locked {
                 recordUpdate(netDelta)
-                _updatesPublisher.onNext(netDelta)
+                updatesPublisher.onNext(netDelta)
+                // TODO: come back and fix this up so we fork a single Observer.
+                _rawUpdatesPublisher.onNext(netDelta)
             }
         }
         return currentVault

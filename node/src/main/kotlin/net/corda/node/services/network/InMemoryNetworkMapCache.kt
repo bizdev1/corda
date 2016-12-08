@@ -24,7 +24,7 @@ import net.corda.node.services.network.NetworkMapService.Companion.SUBSCRIPTION_
 import net.corda.node.services.network.NetworkMapService.FetchMapResponse
 import net.corda.node.services.network.NetworkMapService.SubscribeResponse
 import net.corda.node.utilities.AddOrRemove
-import net.corda.node.utilities.afterDatabaseCommit
+import net.corda.node.utilities.bufferUntilDatabaseCommit
 import rx.Observable
 import rx.subjects.PublishSubject
 import java.security.SignatureException
@@ -43,7 +43,9 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     override val partyNodes: List<NodeInfo> get() = registeredNodes.map { it.value }
     override val networkMapNodes: List<NodeInfo> get() = getNodesWithService(NetworkMapService.type)
     private val _changed = PublishSubject.create<MapChange>()
-    override val changed: Observable<MapChange> = _changed.afterDatabaseCommit()
+    private val changePublisher: rx.Observer<MapChange> get() = _changed.bufferUntilDatabaseCommit()
+    override val changed: Observable<MapChange> get() = _changed
+
     private val _registrationFuture = SettableFuture.create<Unit>()
     override val mapServiceRegistered: ListenableFuture<Unit> get() = _registrationFuture
 
@@ -51,7 +53,7 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     protected var registeredNodes: MutableMap<Party, NodeInfo> = Collections.synchronizedMap(HashMap<Party, NodeInfo>())
 
     override fun track(): Pair<List<NodeInfo>, Observable<MapChange>> {
-        synchronized(_changed) {
+        synchronized(changed) {
             return Pair(partyNodes, changed.bufferUntilSubscribed())
         }
     }
@@ -92,9 +94,9 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
         synchronized(_changed) {
             val previousNode = registeredNodes.put(node.legalIdentity, node)
             if (previousNode == null) {
-                _changed.onNext(MapChange.Added(node))
+                changePublisher.onNext(MapChange.Added(node))
             } else if (previousNode != node) {
-                _changed.onNext(MapChange.Modified(node, previousNode))
+                changePublisher.onNext(MapChange.Modified(node, previousNode))
             }
         }
     }
@@ -102,7 +104,7 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     override fun removeNode(node: NodeInfo) {
         synchronized(_changed) {
             registeredNodes.remove(node.legalIdentity)
-            _changed.onNext(MapChange.Removed(node))
+            changePublisher.onNext(MapChange.Removed(node))
         }
     }
 
