@@ -13,8 +13,8 @@ import kotlinx.support.jdk7.use
 import net.corda.core.crypto.newSecureRandom
 import org.slf4j.Logger
 import rx.Observable
+import rx.Observer
 import rx.subjects.PublishSubject
-import rx.subjects.Subject
 import rx.subjects.UnicastSubject
 import java.io.BufferedInputStream
 import java.io.InputStream
@@ -366,9 +366,9 @@ fun <T> Observable<T>.bufferUntilSubscribed(): Observable<T> {
 }
 
 /**
- * Copy an [rx.Observer] to multiple other [rx.Observer]s.
+ * Copy an [Observer] to multiple other [Observer]s.
  */
-fun <T> rx.Observer<T>.tee(vararg teeTo: rx.Observer<T>): Subject<T, T> {
+fun <T> Observer<T>.tee(vararg teeTo: Observer<T>): Observer<T> {
     val subject = PublishSubject.create<T>()
     subject.subscribe(this)
     teeTo.forEach { subject.subscribe(it) }
