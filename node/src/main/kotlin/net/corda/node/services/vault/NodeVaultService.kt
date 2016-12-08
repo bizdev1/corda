@@ -4,7 +4,6 @@ import com.google.common.collect.Sets
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
-import net.corda.core.tee
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
@@ -13,6 +12,7 @@ import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.Vault
 import net.corda.core.node.services.VaultService
 import net.corda.core.serialization.SingletonSerializeAsToken
+import net.corda.core.tee
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.transactions.WireTransaction
 import net.corda.core.utilities.loggerFor
@@ -80,8 +80,8 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
             }
         }
 
-        val _rawUpdatesPublisher = PublishSubject.create<Vault.Update>()
         val _updatesPublisher = PublishSubject.create<Vault.Update>()
+        val _rawUpdatesPublisher = PublishSubject.create<Vault.Update>()
         // For use during publishing only.
         val updatesPublisher: rx.Observer<Vault.Update> get() = _updatesPublisher.bufferUntilDatabaseCommit().tee(_rawUpdatesPublisher)
 

@@ -43,8 +43,8 @@ open class InMemoryNetworkMapCache : SingletonSerializeAsToken(), NetworkMapCach
     override val partyNodes: List<NodeInfo> get() = registeredNodes.map { it.value }
     override val networkMapNodes: List<NodeInfo> get() = getNodesWithService(NetworkMapService.type)
     private val _changed = PublishSubject.create<MapChange>()
-    private val changePublisher: rx.Observer<MapChange> get() = _changed.bufferUntilDatabaseCommit()
     override val changed: Observable<MapChange> get() = _changed
+    private val changePublisher: rx.Observer<MapChange> get() = _changed.bufferUntilDatabaseCommit()
 
     private val _registrationFuture = SettableFuture.create<Unit>()
     override val mapServiceRegistered: ListenableFuture<Unit> get() = _registrationFuture
