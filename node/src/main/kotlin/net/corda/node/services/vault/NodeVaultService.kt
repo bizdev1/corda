@@ -4,6 +4,7 @@ import com.google.common.collect.Sets
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
+import net.corda.core.tee
 import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
@@ -82,7 +83,7 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
         val _rawUpdatesPublisher = PublishSubject.create<Vault.Update>()
         val _updatesPublisher = PublishSubject.create<Vault.Update>()
         // For use during publishing only.
-        val updatesPublisher: rx.Observer<Vault.Update> get() = _updatesPublisher.bufferUntilDatabaseCommit()
+        val updatesPublisher: rx.Observer<Vault.Update> get() = _updatesPublisher.bufferUntilDatabaseCommit().tee(_rawUpdatesPublisher)
 
         fun allUnconsumedStates(): Iterable<StateAndRef<ContractState>> {
             // Order by txhash for if and when transaction storage has some caching.
@@ -134,8 +135,6 @@ class NodeVaultService(private val services: ServiceHub) : SingletonSerializeAsT
             mutex.locked {
                 recordUpdate(netDelta)
                 updatesPublisher.onNext(netDelta)
-                // TODO: come back and fix this up so we fork a single Observer.
-                _rawUpdatesPublisher.onNext(netDelta)
             }
         }
         return currentVault

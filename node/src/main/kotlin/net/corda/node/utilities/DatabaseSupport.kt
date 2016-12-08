@@ -172,30 +172,20 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
 }
 
 /**
- * Buffer observations until after the current or next database transaction has been closed.  Observations are never
+ * Buffer observations until after the current database transaction has been closed.  Observations are never
  * dropped, simply delayed.  They will be stuck forever if there is no subsequent database transaction close, however.
- * In practice the current uses are always followed by a transaction commit & close.
+ * In practice uses are always followed by a transaction commit & close.
  *
- * Primarily for use by component authors to offer [Observable]s without race conditions vs. the database.
- *
- * Detail: Those outside the node should be notified after any [Flow] has checkpointed and the associated database transaction
- * has been committed so that changes are externally visible.  To do so for any [Observable], use this extension function.
- * Otherwise the state associated with the observation might not yet have changed (been committed) to reflect it.
- * If within the node, then it's okay to execute immediately within the same database transaction and therefore this
- * extension function should not be used.
+ * Primarily for use by component authors to publish observations during database transactions without racing against
+ * closing the database transaction.
  *
  * For examples, see the call hierarchy of this function.
  */
-fun <T : Any> Observable<T>.afterDatabaseCommit(): Observable<T> {
-    val databaseTxBoundaries: Observable<StrandLocalTransactionManager.Boundary> = StrandLocalTransactionManager.transactionBoundaries
-    return this.buffer(databaseTxBoundaries).concatMap { Observable.from(it) }
-}
-
-fun <T : Any> Subject<T, T>.bufferUntilDatabaseCommit(): rx.Observer<T> {
+fun <T : Any> rx.Observer<T>.bufferUntilDatabaseCommit(): rx.Observer<T> {
     val currentTxId = StrandLocalTransactionManager.transactionId
     val databaseTxBoundary: Observable<StrandLocalTransactionManager.Boundary> = StrandLocalTransactionManager.transactionBoundaries.filter { it.txId == currentTxId }.first()
     val subject = UnicastSubject.create<T>()
-    val subscription = subject.delaySubscription(databaseTxBoundary).subscribe(this)
+    subject.delaySubscription(databaseTxBoundary).subscribe(this)
     databaseTxBoundary.doOnCompleted { subject.onCompleted() }
     return subject
 }
