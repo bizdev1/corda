@@ -42,4 +42,71 @@ class ObservablesTests {
     }
 
     private fun isInDatabaseTransaction(): Boolean = (TransactionManager.currentOrNull() != null)
+
+    @Test
+    fun `bufferUntilDatabaseCommit delays until transaction closed`() {
+        val (toBeClosed, database) = configureDatabase(makeTestDataSourceProperties())
+
+        val subject = PublishSubject.create<Int>()
+        val observable: Observable<Int> = subject
+
+        val firstEvent = SettableFuture.create<Pair<Int, Boolean>>()
+        val secondEvent = SettableFuture.create<Pair<Int, Boolean>>()
+
+        observable.first().subscribe { firstEvent.set(it to isInDatabaseTransaction()) }
+        observable.skip(1).first().subscribe { secondEvent.set(it to isInDatabaseTransaction()) }
+
+        databaseTransaction(database) {
+            val delayedSubject = subject.bufferUntilDatabaseCommit()
+            assertThat(subject).isNotEqualTo(delayedSubject)
+            delayedSubject.onNext(0)
+            subject.onNext(1)
+            assertThat(firstEvent.isDone).isTrue()
+            assertThat(secondEvent.isDone).isFalse()
+        }
+        assertThat(secondEvent.isDone).isTrue()
+
+        assertThat(firstEvent.get()).isEqualTo(1 to true)
+        assertThat(secondEvent.get()).isEqualTo(0 to false)
+
+        toBeClosed.close()
+    }
+
+    @Test
+    fun `bufferUntilDatabaseCommit delays until transaction closed repeatable`() {
+        val (toBeClosed, database) = configureDatabase(makeTestDataSourceProperties())
+
+        val subject = PublishSubject.create<Int>()
+        val observable: Observable<Int> = subject
+
+        val firstEvent = SettableFuture.create<Pair<Int, Boolean>>()
+        val secondEvent = SettableFuture.create<Pair<Int, Boolean>>()
+
+        observable.first().subscribe { firstEvent.set(it to isInDatabaseTransaction()) }
+        observable.skip(1).first().subscribe { secondEvent.set(it to isInDatabaseTransaction()) }
+
+        databaseTransaction(database) {
+            val delayedSubject = subject.bufferUntilDatabaseCommit()
+            assertThat(subject).isNotEqualTo(delayedSubject)
+            delayedSubject.onNext(0)
+            assertThat(firstEvent.isDone).isFalse()
+            assertThat(secondEvent.isDone).isFalse()
+        }
+        assertThat(firstEvent.isDone).isTrue()
+        assertThat(secondEvent.isDone).isFalse()
+
+        databaseTransaction(database) {
+            val delayedSubject = subject.bufferUntilDatabaseCommit()
+            assertThat(subject).isNotEqualTo(delayedSubject)
+            delayedSubject.onNext(1)
+            assertThat(firstEvent.isDone).isTrue()
+            assertThat(secondEvent.isDone).isFalse()
+        }
+        assertThat(secondEvent.isDone).isTrue()
+
+        assertThat(firstEvent.get()).isEqualTo(0 to false)
+        assertThat(secondEvent.get()).isEqualTo(1 to false)
+
+        toBeClosed.close()
+    }
 }

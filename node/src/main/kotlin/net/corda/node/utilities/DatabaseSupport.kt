@@ -13,6 +13,7 @@ import org.jetbrains.exposed.sql.transactions.TransactionInterface
 import org.jetbrains.exposed.sql.transactions.TransactionManager
 import rx.Observable
 import rx.subjects.PublishSubject
+import rx.subjects.UnicastSubject
 import java.io.Closeable
 import java.security.PublicKey
 import java.sql.Connection
@@ -78,6 +79,8 @@ fun <T> isolatedTransaction(database: Database, block: Transaction.() -> T): T {
 class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionManager {
 
     companion object {
+        private val TX_ID = Key<UUID>()
+
         private val threadLocalDb = ThreadLocal<Database>()
         private val threadLocalTx = ThreadLocal<Transaction>()
         private val databaseToInstance = ConcurrentHashMap<Database, StrandLocalTransactionManager>()
@@ -99,12 +102,16 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
                 threadLocalDb.set(value)
             }
 
+        val transactionId: UUID
+            get() = threadLocalTx.get()?.getUserData(TX_ID) ?: throw IllegalStateException("Was expecting to find transaction set on current strand: ${Strand.currentStrand()}")
+
         val manager: StrandLocalTransactionManager get() = databaseToInstance[database]!!
 
         val transactionBoundaries: PublishSubject<Boundary> get() = manager._transactionBoundaries
     }
 
-    object Boundary
+
+    data class Boundary(val txId: UUID)
 
     private val _transactionBoundaries = PublishSubject.create<Boundary>()
 
@@ -120,14 +127,19 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
         databaseToInstance[database] = this
     }
 
-    override fun newTransaction(isolation: Int): Transaction = Transaction(StrandLocalTransaction(database, isolation, threadLocalTx, transactionBoundaries)).apply {
-        threadLocalTx.set(this)
+    override fun newTransaction(isolation: Int): Transaction {
+        val impl = StrandLocalTransaction(database, isolation, threadLocalTx, transactionBoundaries)
+        return Transaction(impl).apply {
+            threadLocalTx.set(this)
+            putUserData(TX_ID, impl.id)
+        }
     }
 
     override fun currentOrNull(): Transaction? = threadLocalTx.get()
 
     // Direct copy of [ThreadLocalTransaction].
     private class StrandLocalTransaction(override val db: Database, isolation: Int, val threadLocal: ThreadLocal<Transaction>, val transactionBoundaries: PublishSubject<Boundary>) : TransactionInterface {
+        val id = UUID.randomUUID()
 
         override val connection: Connection by lazy(LazyThreadSafetyMode.NONE) {
             db.connector().apply {
@@ -152,7 +164,7 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
             connection.close()
             threadLocal.set(outerTransaction)
             if (outerTransaction == null) {
-                transactionBoundaries.onNext(Boundary)
+                transactionBoundaries.onNext(Boundary(id))
             }
         }
     }
@@ -176,6 +188,15 @@ class StrandLocalTransactionManager(initWithDatabase: Database) : TransactionMan
 fun <T : Any> Observable<T>.afterDatabaseCommit(): Observable<T> {
     val databaseTxBoundaries: Observable<StrandLocalTransactionManager.Boundary> = StrandLocalTransactionManager.transactionBoundaries
     return this.buffer(databaseTxBoundaries).concatMap { Observable.from(it) }
+}
+
+fun <T : Any> PublishSubject<T>.bufferUntilDatabaseCommit(): rx.Observer<T> {
+    val currentTxId = StrandLocalTransactionManager.transactionId
+    val databaseTxBoundary: Observable<StrandLocalTransactionManager.Boundary> = StrandLocalTransactionManager.transactionBoundaries.filter { it.txId == currentTxId }.first()
+    val subject = UnicastSubject.create<T>()
+    val subscription = subject.delaySubscription(databaseTxBoundary).subscribe(this)
+    databaseTxBoundary.doOnCompleted { subject.onCompleted() }
+    return subject
 }
 
 // Composite columns for use with below Exposed helpers.
